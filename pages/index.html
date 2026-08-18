@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OCD-ID Data Explorer</title>
+<script>
+  // Applied synchronously (before first paint) to avoid a flash of the
+  // wrong theme; js/theme.js wires up the toggle button.
+  const storedTheme = localStorage.getItem("theme");
+  if (storedTheme === "light" || storedTheme === "dark") {
+    document.documentElement.dataset.theme = storedTheme;
+  }
+</script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>OCD-ID Data Explorer</h1>
+      <p>
+        Run SQL directly against the published jurisdictions dataset
+      </p>
+    </div>
+    <button id="theme-toggle" class="btn-ghost" type="button" aria-label="Toggle light/dark theme">Light / Dark</button>
+  </header>
+
+  <div id="status">Loading DuckDB-Wasm…</div>
+  <div id="error"></div>
+
+  <div id="schema-wrap"></div>
+
+  <label class="field-label" for="query">SQL query</label>
+  <textarea id="query" spellcheck="false"></textarea>
+  <div class="controls">
+    <button id="run" disabled>Run query</button>
+    <button id="export-csv" class="btn-ghost" type="button" disabled>Export CSV</button>
+    <span class="hint" id="tables-hint"></span>
+  </div>
+
+  <div id="results-wrap"></div>
+  <div class="pagination" id="pagination" hidden>
+    <button id="page-prev" class="btn-ghost" type="button">Previous</button>
+    <span id="page-info" class="hint"></span>
+    <button id="page-next" class="btn-ghost" type="button">Next</button>
+  </div>
+  <div id="meta"></div>
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -179,3 +179,4 @@ src/init_migration/downloader.log
 # VSCode settings
 .vscode/
 
+.DS_Store
