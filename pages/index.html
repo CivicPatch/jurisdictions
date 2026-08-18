@@ -29,7 +29,7 @@
   <div id="status">Loading DuckDB-Wasm…</div>
   <div id="error"></div>
 
-  <div id="schema-wrap"></div>
+  <div id="table-names-wrap"></div>
 
   <label class="field-label" for="query">SQL query</label>
   <textarea id="query" spellcheck="false"></textarea>
@@ -47,6 +47,36 @@
   </div>
   <div id="meta"></div>
 </main>
+
+<div class="fab-stack">
+  <button id="history-toggle" class="fab" type="button">Query History</button>
+  <button id="examples-toggle" class="fab" type="button">Query Examples</button>
+  <button id="definitions-toggle" class="fab" type="button">Table Definitions</button>
+</div>
+
+<dialog id="history-modal">
+  <div class="modal-header">
+    <h2>Query History</h2>
+    <button id="history-close" class="btn-ghost" type="button" aria-label="Close">Close</button>
+  </div>
+  <div id="history-list"></div>
+</dialog>
+
+<dialog id="examples-modal">
+  <div class="modal-header">
+    <h2>Query Examples</h2>
+    <button id="examples-close" class="btn-ghost" type="button" aria-label="Close">Close</button>
+  </div>
+  <div id="examples-list"></div>
+</dialog>
+
+<dialog id="definitions-modal">
+  <div class="modal-header">
+    <h2>Table Definitions</h2>
+    <button id="definitions-close" class="btn-ghost" type="button" aria-label="Close">Close</button>
+  </div>
+  <div id="table-definitions-wrap"></div>
+</dialog>
 
 <script type="module" src="js/main.js"></script>
 </body>

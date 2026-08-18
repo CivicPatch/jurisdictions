@@ -2,11 +2,31 @@ import { Theme } from "./theme.js";
 import { Dataset } from "./dataset.js";
 import { SchemaPanel } from "./schema-panel.js";
 import { QueryRunner } from "./query-runner.js";
+import { Examples } from "./examples.js";
+import { History } from "./history.js";
 
 const statusEl = document.getElementById("status");
 const tablesHintEl = document.getElementById("tables-hint");
 
 Theme.init();
+
+function wireModal(toggleId, modalId, closeId) {
+  const modal = document.getElementById(modalId);
+  document.getElementById(toggleId).addEventListener("click", () => modal.showModal());
+  document.getElementById(closeId).addEventListener("click", () => modal.close());
+  return modal;
+}
+const examplesModal = wireModal("examples-toggle", "examples-modal", "examples-close");
+wireModal("definitions-toggle", "definitions-modal", "definitions-close");
+const historyModal = wireModal("history-toggle", "history-modal", "history-close");
+
+document.getElementById("history-toggle").addEventListener("click", () => {
+  History.render((sql) => {
+    QueryRunner.setQuery(sql);
+    QueryRunner.run();
+    historyModal.close();
+  });
+});
 
 (async () => {
   try {
@@ -19,9 +39,17 @@ Theme.init();
 
     statusEl.textContent = "Loading table schema…";
     const schemaRows = await SchemaPanel.load(conn, tableNames);
-    SchemaPanel.render(schemaRows, rowCounts, (table) => {
+    const onSelectTable = (table) => {
       QueryRunner.setQuery(`SELECT * FROM ${table};`);
       QueryRunner.run();
+    };
+    SchemaPanel.renderNames(schemaRows, rowCounts, onSelectTable);
+    SchemaPanel.renderDefinitions(schemaRows, rowCounts);
+
+    Examples.render((sql) => {
+      QueryRunner.setQuery(sql);
+      QueryRunner.run();
+      examplesModal.close();
     });
 
     statusEl.textContent = "Ready.";

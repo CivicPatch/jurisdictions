@@ -1,4 +1,5 @@
 import { escapeHtml, formatCell } from "./utils.js";
+import { History } from "./history.js";
 
 export const PAGE_SIZE = 100;
 
@@ -6,8 +7,9 @@ export const PAGE_SIZE = 100;
 // submitted through run() is paginated by wrapping it as a subquery with
 // LIMIT/OFFSET pushed down into DuckDB — this keeps huge result sets (e.g.
 // scanning master_ocdids' ~195k rows with no LIMIT) from ever being rendered
-// into the DOM at once. CSV export is scoped to whatever page is on screen,
-// matching the paginated view rather than re-fetching the full result set.
+// into the DOM at once. CSV export, however, covers every row matching the
+// current query (not just the page on screen) — see exportCsv() for how it
+// stays non-blocking for large exports.
 export const QueryRunner = {
   queryEl: document.getElementById("query"),
   runBtn: document.getElementById("run"),
@@ -101,28 +103,24 @@ export const QueryRunner = {
     this.nextBtn.disabled = this.offset + PAGE_SIZE >= this.totalRows;
   },
 
+  escapeCsvCell(value) {
+    const str = formatCell(value);
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  },
+
   toCsv(table) {
     const cols = table.schema.fields.map((f) => f.name);
     const rows = table.toArray();
 
-    const escapeCsvCell = (value) => {
-      const str = formatCell(value);
-      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-    };
-
-    const lines = [cols.map(escapeCsvCell).join(",")];
+    const lines = [cols.map((c) => this.escapeCsvCell(c)).join(",")];
     for (const row of rows) {
-      lines.push(cols.map((c) => escapeCsvCell(row[c])).join(","));
+      lines.push(cols.map((c) => this.escapeCsvCell(row[c])).join(","));
     }
     return lines.join("\r\n");
   },
 
-  exportCsv() {
-    if (!this.lastResult) return;
-    const csv = this.toCsv(this.lastResult);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  downloadBlob(blob) {
     const url = URL.createObjectURL(blob);
-
     const link = document.createElement("a");
     link.href = url;
     link.download = `query-results-${Date.now()}.csv`;
@@ -130,6 +128,51 @@ export const QueryRunner = {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  },
+
+  async exportCsv() {
+    if (!this.baseSql) {
+      // Non-paginated fallback path: lastResult already *is* the full result.
+      if (!this.lastResult) return;
+      this.downloadBlob(new Blob([this.toCsv(this.lastResult)], { type: "text/csv;charset=utf-8;" }));
+      return;
+    }
+
+    // Exports every row matching the current query, not just the page on
+    // screen. Streams Arrow record batches via conn.send() (rather than
+    // conn.query(), which would materialize the whole result at once) and
+    // yields to the event loop between batches, so a large export (e.g. an
+    // unfiltered scan of master_ocdids' ~195k rows) builds the CSV in the
+    // background without freezing the tab.
+    const originalLabel = this.exportBtn.textContent;
+    this.exportBtn.disabled = true;
+    this.exportBtn.textContent = "Exporting…";
+    this.clearError();
+
+    try {
+      const reader = await this.conn.send(this.baseSql);
+      const chunks = [];
+      let cols = null;
+
+      for await (const batch of reader) {
+        if (!cols) {
+          cols = batch.schema.fields.map((f) => f.name);
+          chunks.push(cols.map((c) => this.escapeCsvCell(c)).join(",") + "\r\n");
+        }
+        for (const row of batch.toArray()) {
+          chunks.push(cols.map((c) => this.escapeCsvCell(row[c])).join(",") + "\r\n");
+        }
+        // Yield to the browser between batches so the page stays responsive.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      this.downloadBlob(new Blob(chunks, { type: "text/csv;charset=utf-8;" }));
+    } catch (err) {
+      this.showError(err);
+    } finally {
+      this.exportBtn.disabled = false;
+      this.exportBtn.textContent = originalLabel;
+    }
   },
 
   // Fetches the page at the current offset for the already-counted baseSql.
@@ -157,6 +200,7 @@ export const QueryRunner = {
   async run() {
     this.clearError();
     this.runBtn.disabled = true;
+    History.add(this.queryEl.value);
     const sql = this.queryEl.value.trim().replace(/;\s*$/, "");
 
     try {
