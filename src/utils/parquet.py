@@ -28,9 +28,6 @@ class TableExportConfig:
 
 TABLE_CONFIG = [
     TableExportConfig(
-        name="local_ocdids", partition_col="state", sort_cols=["state", "id"]
-    ),
-    TableExportConfig(
         name="master_ocdids",
         partition_col="state",
         sort_cols=["state"],
@@ -39,10 +36,6 @@ TABLE_CONFIG = [
     TableExportConfig(
         name="ocdid_uuid_lookup", partition_col="state", sort_cols=["state", "ocdid"]
     ),
-    TableExportConfig(
-        name="local_orphans", partition_col="state", sort_cols=["state", "id"]
-    ),
-    TableExportConfig(name="master_orphans", partition_col=None, sort_cols=["id"]),
 ]
 
 
