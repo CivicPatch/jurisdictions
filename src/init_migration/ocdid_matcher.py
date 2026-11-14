@@ -24,7 +24,10 @@ logger = getLogger(__name__)
 
 DEFAULT_PARQUET_PATH = "data/parquet"
 DEFAULT_DB_PATH = "data/ocdid_pipeline.duckdb"
-DEFAULT_CSV_BACKUP = "data/ocdid_uuid_lookup.csv"
+
+# For the ocdid_uuid_lookup.csv; people can use to to find the original uuidv5 identifier
+# for their jurisdiction/division 
+DEFAULT_CSV_BACKUP_DIR = "data"
 
 # States use `state:`, DC uses `district:`, and territories use `territory:`.
 STATE_SEGMENTS = ("state", "district", "territory")
@@ -45,11 +48,11 @@ class OCDidMatcher:
         self,
         db_path: str = DEFAULT_DB_PATH,
         states: list[str] | None = None,
-        csv_backup_path: str = DEFAULT_CSV_BACKUP,
+        csv_backup_dir: str = DEFAULT_CSV_BACKUP_DIR,
     ) -> None:
         self.db_path = db_path
-        self.states = [s.lower() for s in states] if states else []
-        self.csv_backup_path = csv_backup_path
+        self.states: list[str] = [s.lower() for s in states] if states else []
+        self.csv_backup_dir = csv_backup_dir
 
     def _state_filter(self) -> tuple[str, list[str]]:
         """Build a WHERE clause matching each state's own row and its children."""
@@ -164,9 +167,19 @@ class OCDidMatcher:
             )
 
         # CSV backup
-        if self.csv_backup_path:
-            Path(self.csv_backup_path).parent.mkdir(parents=True, exist_ok=True)
-            conn.execute(
-                f"COPY ocdid_uuid_lookup TO '{self.csv_backup_path}' (HEADER, DELIMITER ',')"
-            )
-            logger.info(f"CSV backup written to {self.csv_backup_path}")
+        if self.csv_backup_dir:
+            for state in self.states:
+                state_file = f"{self.csv_backup_dir}/{state}/ocdid_uuid_lookup.csv"
+                Path(state_file).parent.mkdir(parents=True, exist_ok=True)
+                conn.execute(f"""
+                    COPY (
+                        SELECT *
+                        FROM ocdid_uuid_lookup
+                        WHERE state = '{state}'
+                        ORDER BY ocdid
+                    ) TO '{state_file}' (HEADER, DELIMITER ',')
+                """)
+                logger.info(
+                    "CSV lookup written", extra={"state": state, "csv_path": state_file}
+                )
+

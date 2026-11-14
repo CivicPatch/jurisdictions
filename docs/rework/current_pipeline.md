@@ -97,7 +97,7 @@ Behavior:
   `uuid5(NAMESPACE_URL, ocdid_str)` — **no date input** here, unlike the
   model's own `ensure_uuid5_id` validator (see below).
 - Persists `ocdid_uuid_lookup` in the same DuckDB file, plus a CSV backup at
-  `data/ocdid_uuid_lookup.csv`. The lookup insert uses `WHERE NOT EXISTS` for
+  `data/<state>/ocdid_uuid_lookup.csv`. The lookup insert uses `WHERE NOT EXISTS` for
   idempotency.
 
 Outputs: `MatchResults(matched: list[OCDidIngestResp], skipped_precincts: int)`.
@@ -213,7 +213,7 @@ OCDID synthesis.
   `AsyncDownloader.__aexit__` ([src/init_migration/downloader.py:156-187](../../src/init_migration/downloader.py#L156-L187)).
 - **Validation-CSV cache** `${TMPDIR}/phase3_validation.csv` — refreshed on
   every process start, single-file only.
-- **CSV backup** `data/ocdid_uuid_lookup.csv` — written from DuckDB after
+- **CSV backup** `data/<state>/ocdid_uuid_lookup.csv` — written from DuckDB after
   Phase 2.
 - **Working-tree writes** to `divisions/**` and `jurisdictions/**` when the
   CLI is run with default `output_dir="."`. `GeneratePipeline` takes

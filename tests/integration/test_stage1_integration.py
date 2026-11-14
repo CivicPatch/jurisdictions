@@ -1,6 +1,5 @@
 """Integration test for the full Stage 1 pipeline with mocked HTTP."""
 
-from pathlib import Path
 
 import duckdb
 import httpx
@@ -24,7 +23,7 @@ ocd-division/country:us/state:or/place:portland,Portland
 async def test_full_stage1_pipeline(tmp_path, respx_mock):
     """Full pipeline: download → load → select → lookup table."""
     db_path = str(tmp_path / "test.duckdb")
-    csv_path = str(tmp_path / "lookup.csv")
+    csv_dir = str(tmp_path)
 
     dm = DownloadManager(states=["wa", "tx"], db_path=db_path)
 
@@ -39,7 +38,7 @@ async def test_full_stage1_pipeline(tmp_path, respx_mock):
 
     # Phase 2: Select
     matcher = OCDidMatcher(
-        db_path=db_path, states=["wa", "tx"], csv_backup_path=csv_path
+        db_path=db_path, states=["wa", "tx"], csv_backup_dir=csv_dir
     )
     results = matcher.run_matching()
 
@@ -54,11 +53,12 @@ async def test_full_stage1_pipeline(tmp_path, respx_mock):
     assert lookup_count == 4
 
     # Verify CSV backup
-    assert Path(csv_path).exists()
+    assert (tmp_path / "wa" / "ocdid_uuid_lookup.csv").exists()
+    assert (tmp_path / "tx" / "ocdid_uuid_lookup.csv").exists()
 
     # Verify determinism — re-run should produce same UUIDs
     matcher2 = OCDidMatcher(
-        db_path=db_path, states=["wa", "tx"], csv_backup_path=csv_path
+        db_path=db_path, states=["wa", "tx"], csv_backup_dir=csv_dir
     )
     results2 = matcher2.run_matching()
     uuids1 = sorted(str(r.uuid) for r in results.matched)

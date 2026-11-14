@@ -33,7 +33,7 @@ def populated_db(tmp_path):
 
 
 def _selected_ids(db_path: str, states: list[str]) -> set[str]:
-    matcher = OCDidMatcher(db_path=db_path, states=states, csv_backup_path="")
+    matcher = OCDidMatcher(db_path=db_path, states=states, csv_backup_dir="")
     return {r.ocdid.raw_ocdid for r in matcher.run_matching().matched}
 
 
@@ -48,7 +48,7 @@ def test_selects_every_master_row_for_state(populated_db):
 
 def test_skips_precincts(populated_db):
     """Precinct rows are not selected and are counted as skipped."""
-    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_path="")
+    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")
     results = matcher.run_matching()
     selected = {r.ocdid.raw_ocdid for r in results.matched}
     assert (
@@ -78,7 +78,7 @@ def test_selects_all_rows_without_state_filter(populated_db):
 
 def test_match_returns_ocdid_ingest_resp(populated_db):
     """Each selected record should produce a valid OCDidIngestResp."""
-    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_path="")
+    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")
     results = matcher.run_matching()
     for resp in results.matched:
         assert isinstance(resp, OCDidIngestResp)
@@ -89,7 +89,7 @@ def test_match_returns_ocdid_ingest_resp(populated_db):
 
 def test_raw_record_contains_master_data(populated_db):
     """raw_record should contain the master list columns."""
-    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_path="")
+    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")
     results = matcher.run_matching()
     for resp in results.matched:
         assert "id" in resp.raw_record
@@ -98,10 +98,10 @@ def test_raw_record_contains_master_data(populated_db):
 
 def test_match_generates_deterministic_uuids(populated_db):
     """Same OCD ID should produce the same UUID across runs."""
-    matcher1 = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_path="")
+    matcher1 = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")
     results1 = matcher1.run_matching()
 
-    matcher2 = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_path="")
+    matcher2 = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")
     results2 = matcher2.run_matching()
 
     uuids1 = {r.ocdid.raw_ocdid: str(r.uuid) for r in results1.matched}
@@ -111,7 +111,7 @@ def test_match_generates_deterministic_uuids(populated_db):
 
 def test_lookup_table_created_in_duckdb(populated_db):
     """run_matching() should create an ocdid_uuid_lookup table."""
-    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_path="")
+    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")
     matcher.run_matching()
 
     conn = duckdb.connect(populated_db)
@@ -122,9 +122,9 @@ def test_lookup_table_created_in_duckdb(populated_db):
 
 def test_lookup_csv_backup_created(populated_db, tmp_path):
     """run_matching() should export a CSV backup of the lookup table."""
-    csv_path = str(tmp_path / "lookup.csv")
+    csv_path = str(tmp_path / "wa" / "ocdid_uuid_lookup.csv")
     matcher = OCDidMatcher(
-        db_path=populated_db, states=["wa"], csv_backup_path=csv_path
+        db_path=populated_db, states=["wa"], csv_backup_dir=str(tmp_path)
     )
     matcher.run_matching()
     assert Path(csv_path).exists()
@@ -132,9 +132,32 @@ def test_lookup_csv_backup_created(populated_db, tmp_path):
     assert "seattle" in content
 
 
+def test_lookup_csv_backup_with_no_states_does_not_crash(populated_db, tmp_path):
+    """A run with no state filter writes no per-state CSV and must not fail."""
+    matcher = OCDidMatcher(db_path=populated_db, states=None, csv_backup_dir=str(tmp_path))
+    matcher.run_matching()
+
+    assert list(tmp_path.glob("*/ocdid_uuid_lookup.csv")) == []
+
+
+def test_lookup_csv_backup_logs_each_state(populated_db, tmp_path, caplog):
+    """Every state's CSV is logged, with the path as a structured field."""
+    matcher = OCDidMatcher(
+        db_path=populated_db, states=["wa", "tx"], csv_backup_dir=str(tmp_path)
+    )
+    with caplog.at_level("INFO", logger="src.init_migration.ocdid_matcher"):
+        matcher.run_matching()
+
+    logged = sorted(getattr(r, "csv_path", "") for r in caplog.records if hasattr(r, "csv_path"))
+    assert logged == [
+        str(tmp_path / "tx" / "ocdid_uuid_lookup.csv"),
+        str(tmp_path / "wa" / "ocdid_uuid_lookup.csv"),
+    ]
+
+
 def test_no_orphan_tables_created(populated_db):
     """run_matching() should no longer create orphan tables."""
-    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_path="")
+    matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")
     matcher.run_matching()
 
     conn = duckdb.connect(populated_db)
