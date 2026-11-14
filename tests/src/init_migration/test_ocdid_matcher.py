@@ -155,6 +155,22 @@ def test_lookup_csv_backup_logs_each_state(populated_db, tmp_path, caplog):
     ]
 
 
+def test_lookup_state_for_district_of_columbia(populated_db, tmp_path):
+    """DC has no state: segment; its lookup rows are stored and exported under dc."""
+    matcher = OCDidMatcher(
+        db_path=populated_db, states=["dc"], csv_backup_dir=str(tmp_path)
+    )
+    matcher.run_matching()
+
+    conn = duckdb.connect(populated_db)
+    states = conn.execute("SELECT DISTINCT state FROM ocdid_uuid_lookup").fetchall()
+    conn.close()
+    assert states == [("dc",)]
+
+    content = (tmp_path / "dc" / "ocdid_uuid_lookup.csv").read_text()
+    assert "district:dc/ward:1" in content
+
+
 def test_no_orphan_tables_created(populated_db):
     """run_matching() should no longer create orphan tables."""
     matcher = OCDidMatcher(db_path=populated_db, states=["wa"], csv_backup_dir="")

@@ -17,7 +17,7 @@ from uuid import NAMESPACE_URL, uuid5
 import duckdb
 
 from src.init_migration.pipeline_models import OCDidIngestResp
-from src.models.ocdid import OCDIdParsed
+from src.models.ocdid import STATE_SEGMENTS, OCDIdParsed
 from src.utils.ocdid import ocdid_parser
 
 logger = getLogger(__name__)
@@ -28,9 +28,6 @@ DEFAULT_DB_PATH = "data/ocdid_pipeline.duckdb"
 # For the ocdid_uuid_lookup.csv; people can use to to find the original uuidv5 identifier
 # for their jurisdiction/division 
 DEFAULT_CSV_BACKUP_DIR = "data"
-
-# States use `state:`, DC uses `district:`, and territories use `territory:`.
-STATE_SEGMENTS = ("state", "district", "territory")
 
 
 @dataclass
@@ -99,14 +96,7 @@ class OCDidMatcher:
                     results.skipped_precincts += 1
                     continue
 
-                parsed = OCDIdParsed(
-                    base_ocdid=ocdid_str,
-                    raw_ocdid=ocdid_str,
-                    country=parsed_dict.get("country", "us"),
-                    state=parsed_dict.get("state"),
-                    county=parsed_dict.get("county"),
-                    place=parsed_dict.get("place"),
-                )
+                parsed = OCDIdParsed.parse_ocdid(ocdid_str)
 
                 # Generate UUID5 from OCD ID
                 det_id = uuid5(NAMESPACE_URL, ocdid_str)
